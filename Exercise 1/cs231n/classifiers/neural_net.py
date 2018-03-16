@@ -73,24 +73,26 @@ def two_layer_net(X, model, y=None, reg=0.0):
   W1,b1,W2,b2 = model['W1'], model['b1'], model['W2'], model['b2']
   N, D = X.shape
 
-  # compute the forward pass
-  scores = None
   #############################################################################
   # TODO: Perform the forward pass, computing the class scores for the input. #
   # Store the result in the scores variable, which should be an array of      #
   # shape (N, C).                                                             #
   #############################################################################
-  pass
+  # compute the forward pass
+  # Hidden layer
+  H1 = np.dot(X,W1)+b1
+  a1 = np.maximum(0,H1)
+
+  # Output layer
+  scores = np.dot(a1,W2)+b2
   #############################################################################
   #                              END OF YOUR CODE                             #
   #############################################################################
-  
+
   # If the targets are not given then jump out, we're done
   if y is None:
     return scores
 
-  # compute the loss
-  loss = None
   #############################################################################
   # TODO: Finish the forward pass, and compute the loss. This should include  #
   # both the data loss and L2 regularization for W1 and W2. Store the result  #
@@ -98,19 +100,58 @@ def two_layer_net(X, model, y=None, reg=0.0):
   # classifier loss. So that your results match ours, multiply the            #
   # regularization loss by 0.5                                                #
   #############################################################################
-  pass
+  # compute the loss
+  # shift the values of f so that the highest number is 0 for numeric stability
+  f = scores - np.max(scores)
+
+  # Calculate classifier probability for all classes
+  num = np.exp(f)
+  den = np.sum(np.exp(f), axis=1, keepdims=True)
+  probs = np.divide(num,den)
+
+  # Determine softmax classifier loss (average cross-entropy loss)
+  log_probs = -np.log(probs[range(N), y])
+  data_loss = np.sum(log_probs) / N
+
+  # Calculate regularization loss
+  reg_loss = 0.5*reg*(np.sum(np.square(W1))+np.sum(np.square(W2)))
+
+  # Calculate total loss
+  loss = data_loss + reg_loss
   #############################################################################
   #                              END OF YOUR CODE                             #
   #############################################################################
 
-  # compute the gradients
-  grads = {}
   #############################################################################
   # TODO: Compute the backward pass, computing the derivatives of the weights #
   # and biases. Store the results in the grads dictionary. For example,       #
   # grads['W1'] should store the gradient on W1, and be a matrix of same size #
   #############################################################################
-  pass
+  # Compute gradients
+  grads = {}
+
+  # Output scores gradient
+  dscores = probs
+  dscores[range(N), y] -= 1
+  dscores /= N
+
+  # Backprop to W2 and b2
+  grads['W2'] = np.dot(a1.T, dscores)
+  grads['b2'] = np.sum(dscores, axis=0, keepdims=True)
+
+  # Backprop to hidden layer
+  dhidden = np.dot(dscores, W2.T)
+
+  # Backprop the ReLU non-linearity
+  dhidden[a1 <= 0] = 0
+
+  # Backprop to W1 and b1
+  grads['W1'] = np.dot(X.T, dhidden)
+  grads['b1'] = np.sum(dhidden, axis=0, keepdims=True)
+
+  # Add regularization gradient contribution
+  grads['W2'] += reg * W2
+  grads['W1'] += reg * W1
   #############################################################################
   #                              END OF YOUR CODE                             #
   #############################################################################

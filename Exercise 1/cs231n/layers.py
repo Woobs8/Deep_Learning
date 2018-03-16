@@ -17,12 +17,14 @@ def affine_forward(x, w, b):
   - out: output, of shape (N, M)
   - cache: (x, w, b)
   """
-  out = None
   #############################################################################
   # TODO: Implement the affine forward pass. Store the result in out. You     #
   # will need to reshape the input into rows.                                 #
   #############################################################################
-  pass
+  N = x.shape[0]
+  D = w.shape[0]
+  X = x.reshape(N,D)
+  out = X.dot(w)+b
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
@@ -46,11 +48,22 @@ def affine_backward(dout, cache):
   - db: Gradient with respect to b, of shape (M,)
   """
   x, w, b = cache
-  dx, dw, db = None, None, None
   #############################################################################
   # TODO: Implement the affine backward pass.                                 #
   #############################################################################
-  pass
+  # Extract dimesions and reshape input
+  N = x.shape[0]
+  D = w.shape[0]
+  X = x.reshape(N,D)
+
+  # Calculate derivate of the loss wrt. weights wrt. by backpropagation from upstream derivative to input
+  dw = X.T.dot(dout)
+
+  # Calculate derivative of the loss wrt. the bias
+  db = np.sum(dout, axis=0, keepdims=True)  # bias nodes have no input
+
+  # Calculate derivative of the loss wrt. input (also called 'error signal')
+  dx = dout.dot(w.T).reshape(x.shape)
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
@@ -68,11 +81,12 @@ def relu_forward(x):
   - out: Output, of the same shape as x
   - cache: x
   """
-  out = None
   #############################################################################
   # TODO: Implement the ReLU forward pass.                                    #
   #############################################################################
-  pass
+  # ReLU saturates all negative input values to 0 and does not affect positive 
+  # input values as they are within the linear area
+  out = np.maximum(x,0)
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
@@ -95,7 +109,9 @@ def relu_backward(dout, cache):
   #############################################################################
   # TODO: Implement the ReLU backward pass.                                   #
   #############################################################################
-  pass
+  # Backprop the ReLU non-linearity
+  dx = dout
+  dx[x < 0] = 0
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
