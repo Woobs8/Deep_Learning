@@ -227,7 +227,31 @@ def conv_forward_naive(x, w, b, conv_param):
   # TODO: Implement the convolutional forward pass.                           #
   # Hint: you can use the function np.pad for padding.                        #
   #############################################################################
-  pass
+  # Dimensions of input data (count, channels, height, width)
+  N, C, H, W = x.shape
+    
+  # Dimensions of filter weights array (filters, channels, height, width)
+  F, C, HH, WW = w.shape
+    
+  # Get convolution parameters
+  stride = conv_param['stride']
+  padding = conv_param['pad']
+
+  # Pad each sample (padding is only applied in the spatial dimensions H and W)
+  x_pad = np.pad(x, ((0,), (0,), (padding,), (padding,)), 'constant')
+    
+  # Define output layer
+  H_out = 1 + (H + 2 * padding - HH) / stride
+  W_out = 1 + (W + 2 * padding - WW) / stride
+  out = np.zeros((N, F, H_out, W_out))
+
+  # Iterate all points in the padded input volume, multiply them by their respective weight and add bias
+  for n in range(N):  # Iterate samples
+      for f in range(F):  # Iterate filter kernels
+          for k in range(H_out): # Iterate height dim
+              for l in range(W_out): # Iterate width dim 
+                  # multiply point with corresponding weight and add bias
+                  out[n, f, k, l] = np.sum(x_pad[n, :, k * stride:k * stride + HH, l * stride:l * stride + WW] * w[f, :]) + b[f]
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
@@ -252,7 +276,63 @@ def conv_backward_naive(dout, cache):
   #############################################################################
   # TODO: Implement the convolutional backward pass.                          #
   #############################################################################
-  pass
+  x, w, b, conv_param = cache
+    
+  # Dimensions of input data (count, channels, height, width)
+  N, C, H, W = x.shape
+
+  # Dimensions of filter weights array (filters, channels, height, width)
+  F, C, HH, WW = w.shape
+    
+  # Dimensions of upstream derivatives (count, filters, height, width)
+  N, F, H_out, W_out = dout.shape  
+    
+  # Get convolution parameters
+  padding = conv_param['pad']
+  stride = conv_param['stride']
+  
+  # Pad each sample (padding is only applied in the spatial dimensions H and W)  
+  x_pad = np.pad(x, ((0,), (0,), (padding,), (padding,)), 'constant')
+
+  # backpropagate gradient with respect to x  
+  dx = np.zeros((N, C, H, W))
+  for n in range(N):   # Iterate samples
+      for i in range(H):   # Iterate input height dim
+          for j in range(W):   # Iterate input width dim
+              for f in range(F):   # Iterate filters
+                  for k in range(H_out):   # Iterate upstream height dim
+                      for l in range(W_out):   # Iterate upstream width dim
+                          # Masks are created to filter the weights corresponding to padded input
+                          mask1 = np.zeros_like(w[f, :, :, :])
+                          mask2 = np.zeros_like(w[f, :, :, :])
+                          # Filter along height dimension
+                          if (i + padding - k * stride) < HH and (i + padding - k * stride) >= 0:
+                              mask1[:, i + padding - k * stride, :] = 1.0
+                          # Filter along width dimension
+                          if (j + padding - l * stride) < WW and (j + padding - l * stride) >= 0:
+                              mask2[:, :, j + padding - l * stride] = 1.0
+                          # apply filtering to weight array
+                          w_mask = np.sum(w[f, :, :, :] * mask1 * mask2, axis=(1, 2))
+                          
+                          # find derivatives by using the filtered weights 
+                          dx[n, :, i, j] += dout[n, f, k, l] * w_mask    
+    
+  # backpropagate gradient with respect to w
+  dw = np.zeros((F, C, HH, WW))
+  for f in range(F):   # Iterate filters
+      for c in range(C):   # Iterate channels
+          for i in range(HH):    # Iterate filter height dim
+              for j in range(WW):   # Iterate filter weidth dim
+                  # Extract sub volume of input volumne, which corresponds to current filter
+                  sub_xpad = x_pad[:, c, i:i + H_out * stride:stride, j:j + W_out * stride:stride]
+                  # find derivates by multiplaction of derivates with subvolume
+                  dw[f, c, i, j] = np.sum(dout[:, f, :, :] * sub_xpad)
+
+  # backpropagate gradient with respect to b
+  db = np.zeros((F))
+  for f in range(F): # Iterate filters
+      db[f] = np.sum(dout[:, f, :, :])
+    
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
@@ -278,7 +358,26 @@ def max_pool_forward_naive(x, pool_param):
   #############################################################################
   # TODO: Implement the max pooling forward pass                              #
   #############################################################################
-  pass
+  # Dimensions of input data (count, channels, height, width)
+  N, C, H, W = x.shape
+    
+  # Get pooling parameters
+  H_pool = pool_param['pool_height']
+  W_pool = pool_param['pool_width']
+  S_pool = pool_param['stride']
+  
+  # Define output layer 
+  H_out = (H - H_pool) / S_pool + 1
+  W_out = (W - W_pool) / S_pool + 1
+  out = np.zeros((N, C, H_out, W_out))
+  
+  # Iterate each point in the output volume and find the maximum value in the corresponding window of the input volume
+  for n in range(N):   # Iterate samples
+      for c in range(C):   # Iterate channels
+          for k in range(H_out):   # Iterate output height dim
+              for l in range(W_out):   # Iterate output width dim
+                  # find the maximum value in the corresponding window of the input volume
+                  out[n, c, k, l] = np.max(x[n, c, k * S_pool:k * S_pool + H_pool, l * S_pool:l * S_pool + W_pool])
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
@@ -300,8 +399,36 @@ def max_pool_backward_naive(dout, cache):
   dx = None
   #############################################################################
   # TODO: Implement the max pooling backward pass                             #
-  #############################################################################
-  pass
+  #############################################################################                      
+  x, pool_param = cache
+  # Dimensions of input data (count, channels, height, width)
+  N, C, H, W = x.shape
+    
+  # Get pooling parameters
+  H_pool = pool_param['pool_height']
+  W_pool = pool_param['pool_width']
+  S_pool = pool_param['stride']
+
+  # Define output layer 
+  H_out = (H - H_pool) / S_pool + 1
+  W_out = (W - W_pool) / S_pool + 1
+  dx = np.zeros((N, C, H, W))
+  
+  for n in range(N):
+      for c in range(C):
+          for k in range(H_out):
+              for l in range(W_out):
+                  # Extract input volume window corresponding to pooled point in output volume
+                  x_pool = x[n, c, k * S_pool:k * S_pool + H_pool, l * S_pool:l * S_pool + W_pool]
+                    
+                  # Find maximum value in the window
+                  x_pool_max = np.max(x_pool)
+                  
+                  # Create mask to filter all other derivatives, but the one corresponding to the maximum point
+                  x_mask = x_pool == x_pool_max
+                  
+                  # Calculate derivative using masked derivatives
+                  dx[n, c, k * S_pool:k * S_pool + H_pool, l * S_pool:l * S_pool + W_pool] += dout[n, c, k, l] * x_mask
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
